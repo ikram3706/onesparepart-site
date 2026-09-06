@@ -2,7 +2,7 @@
 // The Square Access Token is read from an environment variable (SQUARE_ACCESS_TOKEN)
 // that you set in the Vercel dashboard — it is never present in any file here.
 
-const { SquareClient, SquareEnvironment } = require('square');
+const { SquareClient } = require('square');
 const crypto = require('crypto');
 
 module.exports = async (req, res) => {
@@ -15,8 +15,8 @@ module.exports = async (req, res) => {
   const locationId = process.env.SQUARE_LOCATION_ID || 'LDRTW18JCYVAV';
   const environment =
     process.env.SQUARE_ENV === 'production'
-      ? SquareEnvironment.Production
-      : SquareEnvironment.Sandbox;
+      ? 'https://connect.squareup.com'
+      : 'https://connect.squareupsandbox.com';
 
   if (!accessToken) {
     res.status(500).json({

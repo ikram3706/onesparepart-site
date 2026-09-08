@@ -361,7 +361,7 @@
     .drawer,.overlay,.cat-card,.product-card{transition:none;}
   }
 </style>
-<script src="https://sandbox.web.squarecdn.com/v1/square.js"></script>
+<script src="https://js.stripe.com/v3/"></script>
 </head>
 <body>
 
@@ -528,7 +528,7 @@
     </div>
     <div class="foot-bottom">
       <span>© 2026 1SparePart.com — prototype build</span>
-      <span>Payments processed by Square</span>
+      <span>Payments processed by Stripe</span>
     </div>
   </div>
 </footer>
@@ -603,7 +603,7 @@
       <div class="pay-options">
         <div class="pay-card selected" id="payCard" onclick="selectPay('card')">
           <h5>Credit / debit card</h5>
-          <p>Pay now, securely, through Square.</p>
+          <p>Pay now, securely, through Stripe.</p>
         </div>
         <div class="pay-card" id="payPO" onclick="selectPay('po')">
           <h5>Bill to PO / Net-30</h5>
@@ -613,15 +613,15 @@
       <div id="cardPayBlock">
         <div class="field">
           <label>Card details</label>
-          <div id="card-container" style="min-height:56px;border:1px solid var(--line);border-radius:var(--radius);padding:12px;background:var(--white);"></div>
+          <div id="payment-element" style="min-height:56px;border:1px solid var(--line);border-radius:var(--radius);padding:12px;background:var(--white);"></div>
         </div>
         <div id="cardErrors" style="color:#B3261E;font-size:12.5px;margin-top:4px;"></div>
         <div class="square-note">
           <span>🔒</span>
-          <span>Card details are entered directly into Square's secure hosted field above — this site never sees or stores your card number.</span>
+          <span>Card details are entered directly into Stripe's secure hosted field above — this site never sees or stores your card number.</span>
         </div>
       </div>
-      <button class="btn btn-signal btn-full" style="margin-top:20px;" onclick="placeOrder()" id="placeOrderBtn">Pay with Square</button>
+      <button class="btn btn-signal btn-full" style="margin-top:20px;" onclick="placeOrder()" id="placeOrderBtn">Pay now</button>
       <button class="btn btn-ghost btn-full" style="margin-top:10px;" onclick="goToStep(1)">Back</button>
     </div>
 
@@ -919,20 +919,55 @@ function openQuote(){ openOverlay('quoteOverlay'); }
 function submitQuote(){ closeOverlay('quoteOverlay'); alert('Prototype only — this would send your quote request to sales@1sparepart.com.'); }
 
 /* ---------------- CHECKOUT ---------------- */
-// Safe to expose client-side — these identify your Square account/app, they are not secret.
-const SQUARE_APP_ID = 'sandbox-sq0idb-KIQ9g6XAqszomRE-ysdHcw';
-const SQUARE_LOCATION_ID = 'LDRTW18JCYVAV';
+// Safe to expose client-side — this identifies the Stripe account, it is not secret.
+// Fill this in once your client shares their Publishable key (starts with pk_).
+const STRIPE_PUBLISHABLE_KEY = 'pk_live_51UD3UtLAydEjVytU1zyTlf3UO6CdeMtYp2llndgnbKAxwx8Saz9eqQY0aOKAAcAj0WTmDEORF70PTd2YRJoATji6000c19aGSu';
 
 let payMethod = 'card';
-let squarePayments = null;
-let squareCard = null;
+let stripe = null;
+let stripeElements = null;
+let stripePaymentIntentAmount = null; // tracks the cart total the current PaymentIntent was created for
 
-async function initSquareCard(){
-  if(squareCard) return; // already attached
-  if(!window.Square){ console.error('Square.js failed to load'); return; }
-  squarePayments = window.Square.payments(SQUARE_APP_ID, SQUARE_LOCATION_ID);
-  squareCard = await squarePayments.card();
-  await squareCard.attach('#card-container');
+async function initStripeElements(){
+  if(!window.Stripe){ console.error('Stripe.js failed to load'); return; }
+  if(!stripe){ stripe = window.Stripe(STRIPE_PUBLISHABLE_KEY); }
+
+  const amountCents = Math.round(cartSubtotal() * 100);
+  // Re-create the Elements form if this is the first load, or if the cart total changed
+  // since the PaymentIntent was created (e.g. the person went back and edited quantities).
+  if(stripeElements && stripePaymentIntentAmount === amountCents) return;
+
+  const errBox = document.getElementById('cardErrors');
+  errBox.textContent = '';
+
+  try{
+    const orderDetails = {
+      company: document.getElementById('coCompany').value,
+      contact: document.getElementById('coContact').value,
+      email: document.getElementById('coEmail').value,
+      items: state.cart.map(l=>{
+        const p = PRODUCTS.find(x=>x.id===l.id);
+        return { sku:p.sku, name:p.name, qty:l.qty, price:p.price };
+      })
+    };
+
+    const res = await fetch('/api/create-payment-intent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount: amountCents, orderDetails })
+    });
+    const data = await res.json();
+    if(!res.ok || !data.success){
+      throw new Error(data.error || 'Could not start payment.');
+    }
+
+    stripePaymentIntentAmount = amountCents;
+    stripeElements = stripe.elements({ clientSecret: data.clientSecret });
+    const paymentElement = stripeElements.create('payment');
+    paymentElement.mount('#payment-element');
+  } catch(err){
+    errBox.textContent = err.message || 'Payment form could not load — please try again.';
+  }
 }
 
 function openCheckout(){
@@ -955,7 +990,6 @@ function goToStep(n){
     document.getElementById('orderSummary').innerHTML = items + `<hr style="border:none;border-top:1px solid var(--line);margin:10px 0;"><div class="subtotal-row"><strong>Total</strong><strong>$${cartSubtotal().toFixed(2)}</strong></div>`;
     const po = document.getElementById('coPO').value.trim();
     if(po){ selectPay('po'); } else { selectPay('card'); }
-    initSquareCard();
   }
 }
 function selectPay(method){
@@ -963,7 +997,8 @@ function selectPay(method){
   document.getElementById('payCard').classList.toggle('selected', method==='card');
   document.getElementById('payPO').classList.toggle('selected', method==='po');
   document.getElementById('cardPayBlock').style.display = method==='card' ? 'block':'none';
-  document.getElementById('placeOrderBtn').textContent = method==='card' ? 'Pay with Square' : 'Submit order on PO';
+  document.getElementById('placeOrderBtn').textContent = method==='card' ? 'Pay now' : 'Submit order on PO';
+  if(method==='card'){ initStripeElements(); }
 }
 
 async function placeOrder(){
@@ -981,36 +1016,22 @@ async function placeOrder(){
     return;
   }
 
-  // Card payment: tokenize with Square, then charge via our serverless endpoint.
-  if(!squareCard){ errBox.textContent = 'Payment form is still loading — please wait a moment and try again.'; return; }
+  // Card payment: confirm directly with Stripe using the mounted Payment Element.
+  if(!stripe || !stripeElements){ errBox.textContent = 'Payment form is still loading — please wait a moment and try again.'; return; }
 
   goToStep(3); // shows the "Processing payment…" step2b screen
   try{
-    const tokenResult = await squareCard.tokenize();
-    if(tokenResult.status !== 'OK'){
-      throw new Error(tokenResult.errors?.[0]?.message || 'Card details could not be verified.');
-    }
-
-    const amountCents = Math.round(cartSubtotal() * 100);
-    const orderDetails = {
-      company,
-      contact: document.getElementById('coContact').value,
-      email: document.getElementById('coEmail').value,
-      items: state.cart.map(l=>{
-        const p = PRODUCTS.find(x=>x.id===l.id);
-        return { sku:p.sku, name:p.name, qty:l.qty, price:p.price };
-      })
-    };
-
-    const res = await fetch('/api/process-payment', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sourceId: tokenResult.token, amount: amountCents, orderDetails })
+    const { error, paymentIntent } = await stripe.confirmPayment({
+      elements: stripeElements,
+      confirmParams: { return_url: window.location.href },
+      redirect: 'if_required'
     });
-    const data = await res.json();
 
-    if(!res.ok || !data.success){
-      throw new Error(data.error || 'Payment could not be processed.');
+    if(error){
+      throw new Error(error.message || 'Card details could not be verified.');
+    }
+    if(!paymentIntent || paymentIntent.status !== 'succeeded'){
+      throw new Error('Payment was not completed. Please try again.');
     }
 
     document.getElementById('confirmText').textContent =

@@ -3,6 +3,6 @@
   "version": "1.0.0",
   "private": true,
   "dependencies": {
-    "square": "45.1.0"
+    "stripe": "22.6.1"
   }
 }

@@ -916,7 +916,7 @@ function closeOverlay(id){ document.getElementById(id).classList.remove('open');
 document.getElementById('openQuoteBtn').onclick = openQuote;
 document.getElementById('footQuoteLink').onclick = (e)=>{ e.preventDefault(); openQuote(); };
 function openQuote(){ openOverlay('quoteOverlay'); }
-function submitQuote(){
+async function submitQuote(){
   const company = document.getElementById('qCompany').value.trim();
   const contact = document.getElementById('qContact').value.trim();
   const email = document.getElementById('qEmail').value.trim();
@@ -927,19 +927,33 @@ function submitQuote(){
     return;
   }
 
-  const subject = `Quote request${company ? ' — ' + company : ''}`;
-  const bodyLines = [
-    contact ? `Contact: ${contact}` : null,
-    company ? `Company: ${company}` : null,
-    email ? `Email: ${email}` : null,
-    '',
-    'What they need:',
-    details
-  ].filter(line => line !== null).join('\n');
+  const sendBtn = document.querySelector('#quoteOverlay .btn-signal');
+  const originalText = sendBtn.textContent;
+  sendBtn.textContent = 'Sending…';
+  sendBtn.disabled = true;
 
-  const mailtoUrl = `mailto:sales@1sparepart.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(bodyLines)}`;
-  window.location.href = mailtoUrl;
-  closeOverlay('quoteOverlay');
+  try{
+    const res = await fetch('/api/send-quote', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ company, contact, email, details })
+    });
+    const data = await res.json();
+    if(!res.ok || !data.success){
+      throw new Error(data.error || 'Could not send your request.');
+    }
+    closeOverlay('quoteOverlay');
+    alert("Thanks — your quote request has been sent. We'll reply within one business day.");
+    document.getElementById('qCompany').value = '';
+    document.getElementById('qContact').value = '';
+    document.getElementById('qEmail').value = '';
+    document.getElementById('qDetails').value = '';
+  } catch(err){
+    alert(err.message || 'Something went wrong sending your request — please try again.');
+  } finally {
+    sendBtn.textContent = originalText;
+    sendBtn.disabled = false;
+  }
 }
 
 /* ---------------- CHECKOUT ---------------- */

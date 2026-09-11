@@ -548,12 +548,12 @@
     <div class="checkout-body">
       <h3 style="font-size:24px;margin-bottom:6px;">Request a quote</h3>
       <p style="font-size:13.5px;color:var(--steel);margin-bottom:20px;">Tell us what you need and we'll reply with pricing and lead time, usually within one business day.</p>
-      <div class="field"><label>Company name</label><input type="text" placeholder="Acme Manufacturing Co."></div>
+      <div class="field"><label>Company name</label><input type="text" id="qCompany" placeholder="Acme Manufacturing Co."></div>
       <div class="form-grid">
-        <div class="field"><label>Contact name</label><input type="text" placeholder="Jane Rivera"></div>
-        <div class="field"><label>Email</label><input type="email" placeholder="jane@acmemfg.com"></div>
+        <div class="field"><label>Contact name</label><input type="text" id="qContact" placeholder="Jane Rivera"></div>
+        <div class="field"><label>Email</label><input type="email" id="qEmail" placeholder="jane@acmemfg.com"></div>
       </div>
-      <div class="field"><label>What do you need?</label><textarea placeholder="Part numbers, quantities, or a description of the issue..."></textarea></div>
+      <div class="field"><label>What do you need?</label><textarea id="qDetails" placeholder="Part numbers, quantities, or a description of the issue..."></textarea></div>
       <button class="btn btn-signal btn-full" onclick="submitQuote()">Send request</button>
     </div>
   </div>
@@ -916,7 +916,31 @@ function closeOverlay(id){ document.getElementById(id).classList.remove('open');
 document.getElementById('openQuoteBtn').onclick = openQuote;
 document.getElementById('footQuoteLink').onclick = (e)=>{ e.preventDefault(); openQuote(); };
 function openQuote(){ openOverlay('quoteOverlay'); }
-function submitQuote(){ closeOverlay('quoteOverlay'); alert('Prototype only — this would send your quote request to sales@1sparepart.com.'); }
+function submitQuote(){
+  const company = document.getElementById('qCompany').value.trim();
+  const contact = document.getElementById('qContact').value.trim();
+  const email = document.getElementById('qEmail').value.trim();
+  const details = document.getElementById('qDetails').value.trim();
+
+  if(!details){
+    alert('Please describe what you need before sending.');
+    return;
+  }
+
+  const subject = `Quote request${company ? ' — ' + company : ''}`;
+  const bodyLines = [
+    contact ? `Contact: ${contact}` : null,
+    company ? `Company: ${company}` : null,
+    email ? `Email: ${email}` : null,
+    '',
+    'What they need:',
+    details
+  ].filter(line => line !== null).join('\n');
+
+  const mailtoUrl = `mailto:sales@1sparepart.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(bodyLines)}`;
+  window.location.href = mailtoUrl;
+  closeOverlay('quoteOverlay');
+}
 
 /* ---------------- CHECKOUT ---------------- */
 // Safe to expose client-side — this identifies the Stripe account, it is not secret.

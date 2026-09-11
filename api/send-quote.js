@@ -7,11 +7,9 @@ const { Resend } = require('resend');
 // Where quote requests should land. Change this to whatever inbox you want them going to.
 const QUOTE_RECIPIENT = 'sales@1sparepart.com';
 
-// The "from" address Resend sends as. Until a domain is verified in the Resend
-// dashboard, this must stay as onboarding@resend.dev (Resend's shared test sender).
-// Once your client verifies 1sparepart.com in Resend, change this to something like
-// 'OneSparePart <quotes@1sparepart.com>' for a proper branded sender.
-const FROM_ADDRESS = 'OneSparePart Website <onboarding@resend.dev>';
+// The "from" address Resend sends as. 1sparepart.com is verified in Resend,
+// so mail sends from this domain directly instead of the shared test sender.
+const FROM_ADDRESS = 'OneSparePart Website <quotes@1sparepart.com>';
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {

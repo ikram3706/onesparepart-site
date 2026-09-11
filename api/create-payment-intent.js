@@ -1,8 +1,17 @@
 // This runs on Vercel's server, never in the customer's browser.
-// The Stripe Secret Key is read from an environment variable (STRIPE_SECRET_KEY)
-// that your client sets in the Vercel dashboard — it is never present in any file here.
+// The Resend API key is read from an environment variable (RESEND_API_KEY)
+// that you set in the Vercel dashboard — it is never present in any file here.
 
-const Stripe = require('stripe');
+const { Resend } = require('resend');
+
+// Where quote requests should land. Change this to whatever inbox you want them going to.
+const QUOTE_RECIPIENT = 'sales@1sparepart.com';
+
+// The "from" address Resend sends as. Until a domain is verified in the Resend
+// dashboard, this must stay as onboarding@resend.dev (Resend's shared test sender).
+// Once your client verifies 1sparepart.com in Resend, change this to something like
+// 'OneSparePart <quotes@1sparepart.com>' for a proper branded sender.
+const FROM_ADDRESS = 'OneSparePart Website <onboarding@resend.dev>';
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
@@ -10,50 +19,62 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const secretKey = process.env.STRIPE_SECRET_KEY;
+  const apiKey = process.env.RESEND_API_KEY;
 
-  if (!secretKey) {
+  if (!apiKey) {
     res.status(500).json({
       success: false,
-      error: 'Server is not configured with a Stripe secret key yet.',
+      error: 'Server is not configured with a Resend API key yet.',
     });
     return;
   }
 
   try {
-    const { amount, orderDetails } = req.body || {};
+    const { company, contact, email, details } = req.body || {};
 
-    if (!amount || amount <= 0) {
-      res.status(400).json({ success: false, error: 'Missing or invalid order amount.' });
+    if (!details || !String(details).trim()) {
+      res.status(400).json({ success: false, error: 'Please describe what you need.' });
       return;
     }
 
-    const stripe = new Stripe(secretKey);
+    const resend = new Resend(apiKey);
 
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount, // amount in cents
-      currency: 'usd',
-      automatic_payment_methods: { enabled: true },
-      description: orderDetails
-        ? `Order for ${orderDetails.company || 'customer'} — ${
-            orderDetails.items?.length || 0
-          } item(s)`
-        : undefined,
-      metadata: orderDetails
-        ? {
-            company: orderDetails.company || '',
-            contact: orderDetails.contact || '',
-            email: orderDetails.email || '',
-          }
-        : undefined,
+    const html = `
+      <h2>New quote request from 1sparepart.com</h2>
+      <p><strong>Company:</strong> ${escapeHtml(company) || '(not provided)'}</p>
+      <p><strong>Contact:</strong> ${escapeHtml(contact) || '(not provided)'}</p>
+      <p><strong>Email:</strong> ${escapeHtml(email) || '(not provided)'}</p>
+      <p><strong>What they need:</strong></p>
+      <p>${escapeHtml(details).replace(/\n/g, '<br>')}</p>
+    `;
+
+    const { error } = await resend.emails.send({
+      from: FROM_ADDRESS,
+      to: [QUOTE_RECIPIENT],
+      replyTo: email && String(email).trim() ? email : undefined,
+      subject: `Quote request${company ? ' — ' + company : ''}`,
+      html,
     });
 
-    res.status(200).json({ success: true, clientSecret: paymentIntent.client_secret });
+    if (error) {
+      throw new Error(error.message || 'Resend could not send the email.');
+    }
+
+    res.status(200).json({ success: true });
   } catch (err) {
-    console.error('Stripe payment intent error:', err);
+    console.error('Quote email error:', err);
     res.status(500).json({
       success: false,
-      error: err.message || 'Payment could not be started.',
+      error: err.message || 'Quote request could not be sent.',
     });
   }
 };
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}

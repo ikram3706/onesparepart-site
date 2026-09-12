@@ -34,6 +34,7 @@ module.exports = async (req, res) => {
       amount, // amount in cents
       currency: 'usd',
       automatic_payment_methods: { enabled: true },
+      receipt_email: orderDetails?.email || undefined,
       description: orderDetails
         ? `Order for ${orderDetails.company || 'customer'} — ${
             orderDetails.items?.length || 0

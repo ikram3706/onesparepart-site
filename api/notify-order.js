@@ -31,13 +31,31 @@ module.exports = async (req, res) => {
       .map(i => `<li>${i.qty} × ${escapeHtml(i.name)} (${escapeHtml(i.sku)}) — $${(i.price * i.qty).toFixed(2)}</li>`)
       .join('');
 
+    // Optional fields: only render a line when the value is actually present,
+    // so old orders (or fields the customer left blank) never show undefined/null.
+    const optionalLine = (label, value) =>
+      value && String(value).trim() ? `<p><strong>${label}:</strong> ${escapeHtml(value)}</p>` : '';
+
+    // Shipping address: build only from whichever of address/city/state are present.
+    // Backward-compatible with older orders that may not have these fields at all.
+    const addressLines = [orderDetails?.address, orderDetails?.city, orderDetails?.state]
+      .filter(v => v && String(v).trim())
+      .map(v => escapeHtml(v))
+      .join('<br>');
+    const shippingBlock = addressLines
+      ? `<p><strong>Shipping Address:</strong><br>${addressLines}</p>`
+      : '';
+
     const html = `
       <h2>New order — 1sparepart.com</h2>
-      <p><strong>Payment method:</strong> ${paymentMethod === 'po' ? 'Bill to PO / Net-30' : 'Credit card (charged via Stripe)'}</p>
-      ${poNumber ? `<p><strong>PO number:</strong> ${escapeHtml(poNumber)}</p>` : ''}
+      <p><strong>Payment method:</strong> ${paymentMethod === 'po' ? 'Purchase Order / Net-30' : 'Credit card (charged via Stripe)'}</p>
+      ${poNumber ? `<p><strong>Purchase Order #:</strong> ${escapeHtml(poNumber)}</p>` : ''}
       <p><strong>Company:</strong> ${escapeHtml(orderDetails?.company) || '(not provided)'}</p>
       <p><strong>Contact:</strong> ${escapeHtml(orderDetails?.contact) || '(not provided)'}</p>
+      ${optionalLine('Title / Role', orderDetails?.title)}
       <p><strong>Email:</strong> ${escapeHtml(orderDetails?.email) || '(not provided)'}</p>
+      ${optionalLine('Phone', orderDetails?.phone)}
+      ${shippingBlock}
       <p><strong>Items:</strong></p>
       <ul>${itemsHtml}</ul>
       <p><strong>Total: $${Number(total).toFixed(2)}</strong></p>

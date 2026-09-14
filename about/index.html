@@ -410,8 +410,8 @@
       <span class="logo-text-sub">INDUSTRIAL MACHINE PARTS</span>
     </a>
     <div class="top-actions">
-      <a class="btn btn-ghost" href="/">Request Quote</a>
-      <a class="btn cart-btn" href="/">Cart</a>
+      <button class="btn btn-ghost" onclick="openQuote()">Request Quote</button>
+      <a class="btn cart-btn" href="/" title="View cart on the homepage">Cart</a>
     </div>
   </div>
 </header>
@@ -458,7 +458,7 @@
     <div class="wrap">
       <h2>Request a Quote Today</h2>
       <p>Need a part or a repair service? Browse our catalog or give us a call — we'll get back to you with pricing and lead time.</p>
-      <a class="btn btn-signal" href="/">Browse the catalog</a>
+      <a class="btn btn-signal" href="/#categories">Browse the catalog</a>
       <a class="btn btn-ghost" href="tel:+12562078797">Call (256) 207-8797</a>
     </div>
   </section>
@@ -486,7 +486,7 @@
         <ul>
           <li><a href="/about/">About</a></li>
           <li><a href="#">Business accounts</a></li>
-          <li><a href="/">Request a quote</a></li>
+          <li><a href="#" onclick="openQuote(); return false;">Request a quote</a></li>
         </ul>
       </div>
       <div>
@@ -505,6 +505,69 @@
   </div>
 </footer>
 
+<!-- ============ QUOTE REQUEST MODAL (self-contained on this page) ============ -->
+<div class="overlay" id="quoteOverlay">
+  <div class="modal" style="max-width:520px;" role="dialog" aria-modal="true">
+    <button class="modal-close" onclick="closeOverlay('quoteOverlay')">✕</button>
+    <div class="checkout-body">
+      <h3 style="font-size:24px;margin-bottom:6px;">Request a quote</h3>
+      <p style="font-size:13.5px;color:var(--steel);margin-bottom:20px;">Tell us what you need and we'll reply with pricing and lead time, usually within one business day.</p>
+      <div class="field"><label>Company name</label><input type="text" id="qCompany" placeholder="Acme Manufacturing Co."></div>
+      <div class="form-grid">
+        <div class="field"><label>Contact name</label><input type="text" id="qContact" placeholder="Jane Rivera"></div>
+        <div class="field"><label>Email</label><input type="email" id="qEmail" placeholder="jane@acmemfg.com"></div>
+      </div>
+      <div class="field"><label>What do you need?</label><textarea id="qDetails" placeholder="Part numbers, quantities, or a description of the issue..."></textarea></div>
+      <button class="btn btn-signal btn-full" onclick="submitQuote()">Send request</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function openOverlay(id){ document.getElementById(id).classList.add('open'); }
+function closeOverlay(id){ document.getElementById(id).classList.remove('open'); }
+function openQuote(){ openOverlay('quoteOverlay'); }
+
+async function submitQuote(){
+  const company = document.getElementById('qCompany').value.trim();
+  const contact = document.getElementById('qContact').value.trim();
+  const email = document.getElementById('qEmail').value.trim();
+  const details = document.getElementById('qDetails').value.trim();
+
+  if(!details){
+    alert('Please describe what you need before sending.');
+    return;
+  }
+
+  const sendBtn = document.querySelector('#quoteOverlay .btn-signal');
+  const originalText = sendBtn.textContent;
+  sendBtn.textContent = 'Sending…';
+  sendBtn.disabled = true;
+
+  try{
+    const res = await fetch('/api/send-quote', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ company, contact, email, details })
+    });
+    const data = await res.json();
+    if(!res.ok || !data.success){
+      throw new Error(data.error || 'Could not send your request.');
+    }
+    closeOverlay('quoteOverlay');
+    alert("Thanks — your quote request has been sent. We'll reply within one business day.");
+    document.getElementById('qCompany').value = '';
+    document.getElementById('qContact').value = '';
+    document.getElementById('qEmail').value = '';
+    document.getElementById('qDetails').value = '';
+  } catch(err){
+    alert(err.message || 'Something went wrong sending your request — please try again.');
+  } finally {
+    sendBtn.textContent = originalText;
+    sendBtn.disabled = false;
+  }
+}
+</script>
 
 </body>
 </html>
